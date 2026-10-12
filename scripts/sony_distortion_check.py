@@ -69,24 +69,67 @@ def detect_corners(gray):
     if len(pts) == 0:
         return pts.reshape(-1, 2)
     crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 50, 0.005)
-    pts = cv2.cornerSubPix(gray, pts, (11, 11), (-1, -1), crit)
-    return pts.reshape(-1, 2).astype(np.float64)
+    pts = cv2.cornerSubPix(gray, pts, (11, 11), (-1, -1), crit).reshape(-1, 2).astype(np.float64)
+    # Two peaks near one corner can refine to the same point; keep one of each such pair.
+    drop = {j for _, j in cKDTree(pts).query_pairs(3.0)}
+    pts = pts[[i for i in range(len(pts)) if i not in drop]]
+    return pts[[is_x_corner(g, p) for p in pts]]
+
+
+def is_x_corner(g, p, r=12):
+    """A board corner has alternating quadrants: equal diagonals, contrasting neighbours.
+    A point on a straight edge (screen texture can make one look like a saddle) does not."""
+    h, w = g.shape
+    x, y = int(round(p[0])), int(round(p[1]))
+    if not (r <= x < w - r and r <= y < h - r):
+        return False
+    a, c = g[y + r, x + r], g[y - r, x - r]
+    b, d = g[y - r, x + r], g[y + r, x - r]
+    contrast = abs((a + c) - (b + d)) / 2
+    return contrast > 15 and contrast > 2 * max(abs(a - c), abs(b - d))
 
 
 def label_lattice(pts, centre):
-    """Integer (i, j) grid labels for corners connected to the one nearest the centre.
-    i grows along +x, j along +y; local lattice vectors follow the distortion gradually."""
+    """Integer (i, j) grid labels for corners connected to one near the centre.
+    i grows along +x, j along +y; local lattice vectors follow the distortion gradually.
+    The starting vectors are the consensus of many central corners, so a stray corner (screen
+    moiré) next to the start can't derail it; a few starts are tried, the largest result kept."""
     if len(pts) < 20:
         return {}
     tree = cKDTree(pts)
-    start = int(tree.query(centre)[1])
-    d, idx = tree.query(pts[start], k=5)
-    offsets = pts[idx[1:]] - pts[start]
-    spacing = float(np.median(d[1:]))
-    a = offsets[np.argmax(offsets @ np.array([1.0, 0.0]))]
-    b = offsets[np.argmax(offsets @ np.array([0.0, 1.0]))]
-    if abs(np.dot(a, b)) > 0.5 * np.linalg.norm(a) * np.linalg.norm(b):
+    vectors = lattice_vectors(pts, tree, centre)
+    if vectors is None:
         return {}
+    best = {}
+    for start in tree.query(centre, k=min(9, len(pts)))[1]:
+        labels = grow_lattice(pts, tree, int(start), *vectors)
+        if len(labels) > len(best):
+            best = labels
+        if len(best) > 0.8 * len(pts):
+            break
+    return best if len(best) > 50 else {}
+
+
+def lattice_vectors(pts, tree, centre):
+    """Median neighbour offsets near +x and +y among the corners nearest the centre."""
+    k = min(9, len(pts))
+    offsets = []
+    for i in tree.query(centre, k=min(60, len(pts)))[1]:
+        nn = tree.query(pts[i], k=k)[1]
+        offsets.extend(pts[nn[1:]] - pts[i])
+    offsets = np.array(offsets)
+    length = np.linalg.norm(offsets, axis=1)
+    spacing = np.median(np.sort(length.reshape(-1, k - 1), axis=1)[:, :4])
+    offsets = offsets[np.abs(length - spacing) < 0.25 * spacing]
+    angle = np.arctan2(offsets[:, 1], offsets[:, 0])
+    near_x = np.abs(np.angle(np.exp(1j * angle))) < np.pi / 4
+    near_y = np.abs(np.angle(np.exp(1j * (angle - np.pi / 2)))) < np.pi / 4
+    if near_x.sum() < 10 or near_y.sum() < 10:
+        return None
+    return np.median(offsets[near_x], axis=0), np.median(offsets[near_y], axis=0)
+
+
+def grow_lattice(pts, tree, start, a, b):
     labels = {start: (0, 0)}
     taken = {(0, 0): start}
     vec = {start: (a, b)}
@@ -109,7 +152,7 @@ def label_lattice(pts, centre):
             taken[key] = q
             vec[q] = (na, nb)
             queue.append(q)
-    return labels if len(labels) > 50 else {}
+    return labels
 
 
 def board(path):
@@ -305,8 +348,9 @@ def measure(cli, work, arw):
             s, d = match_boards(grid, (size[0] * k, size[1] * k), jgrid, jsize)
         else:
             s, d = sift_pairs(path, jpg)
-        if s is not None:
-            out["vs_jpeg_" + tag] = agreement(s, d, jsize)
+        a = agreement(s, d, jsize) if s is not None else None
+        if a:
+            out["vs_jpeg_" + tag] = a
     if "vs_jpeg_on" in out and "vs_jpeg_off" in out and out["kind"] == "board":
         out["fraction"] = correction_fraction(out["vs_jpeg_on"], out["vs_jpeg_off"], jsize)
     for tag in ("on", "off"):
