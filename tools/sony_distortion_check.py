@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Compare LightCraft's Sony embedded distortion correction with the camera's own JPEG.
 
-    sony_distortion_check.py --cli target/release/lightcraft-cli --work WORKDIR PHOTO_DIR [PHOTO_DIR…]
+    python3 -m venv .venv-distortion && .venv-distortion/bin/pip install -r tools/requirements-sony-distortion-check.txt
+    .venv-distortion/bin/python tools/sony_distortion_check.py --cli target/release/lightcraft-cli \
+        --work WORKDIR [--json results.json] PHOTO_DIR [PHOTO_DIR…]
 
 Every ARW with a JPG of the same name is rendered by LightCraft twice, embedded correction on
 and off, and measured against the camera JPEG (shot with Lens Comp. Distortion on Auto):
@@ -12,8 +14,8 @@ and off, and measured against the camera JPEG (shot with Lens Comp. Distortion o
 
 Checkerboard shots use the board's corners (sub-pixel), other shots SIFT features (agreement
 only). Offsets are in pixels of the camera JPEG (6000 px wide on the A7 III); the "@2376"
-columns rescale them to the 2376 px exports docs/sony-lens-corrections.md reports.
-Needs numpy, scipy and opencv-python-headless.
+columns rescale them to the 2376 px exports docs/sony-lens-corrections.md reports (method and results
+there, under "ILCE-7M3 validation").
 """
 
 import argparse
