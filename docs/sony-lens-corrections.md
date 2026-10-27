@@ -293,8 +293,8 @@ decoded. No private photographs or reference TIFFs are committed.
 ## ILCE-7M3 validation
 
 Checked on 2026-10-12 against the camera's own JPEG of the same exposure, which is an independent renderer
-that applied the correction (RAW+JPEG, Lens Comp. ▸ Distortion Comp.: Auto). 27 RAW+JPEG pairs from one
-ILCE-7M3: a checkerboard filling the frame on a TV (handheld) and on a desktop monitor (tripod), compressed and
+that applied the correction (RAW+JPEG, Lens Comp. ▸ Distortion Comp.: Auto). RAW+JPEG pairs from one
+ILCE-7M3 (26 in the table below, plus two left out as explained under it): a checkerboard filling the frame on a TV (handheld) and on a desktop monitor (tripod), compressed and
 uncompressed raws, apertures from wide open to f/8, plus one textured wall. Tables covered strong barrel (16 mm,
 −690 at the corner), strong pincushion (70 mm, +1161) and the sign change between them.
 
